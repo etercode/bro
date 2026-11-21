@@ -32,6 +32,8 @@ static class Native
 
     public static bool IsKeyDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
+    public static (int X, int Y) CursorPosition() { GetCursorPos(out var p); return (p.X, p.Y); }
+
     /// <summary>Starts a native window move, as if the user grabbed a title bar.</summary>
     public static void BeginWindowDrag(nint hwnd)
     {
@@ -51,11 +53,33 @@ static class Native
         if (hwnd != 0) SetWindowPos(hwnd, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
     }
 
-    /// <summary>Rounds a child window's top corners (sizes in physical pixels). The bottom stays square.</summary>
-    public static void ClipRounded(nint hwnd, int width, int height, int diameter)
+    [DllImport("gdi32.dll")] static extern nint CreateRectRgn(int x1, int y1, int x2, int y2);
+    [DllImport("gdi32.dll")] static extern int CombineRgn(nint dest, nint src1, nint src2, int mode);
+    [DllImport("gdi32.dll")] static extern bool DeleteObject(nint obj);
+    const int RGN_DIFF = 4;
+
+    /// <summary>
+    /// Rounds a child window's top corners (sizes in physical pixels; the bottom stays square) and cuts
+    /// holes where the UI shows a dropdown, so the dropdown drawn underneath becomes visible.
+    /// </summary>
+    public static void ClipRounded(nint hwnd, int width, int height, int diameter, IEnumerable<(int X, int Y, int W, int H)>? holes = null, int holeDiameter = 0)
     {
         if (hwnd == 0 || width <= 0 || height <= 0) return;
-        SetWindowRgn(hwnd, diameter <= 0 ? 0 : CreateRoundRectRgn(0, 0, width + 1, height + 1 + diameter, diameter, diameter), true);
+        var list = holes?.Where(h => h.W > 0 && h.H > 0).ToList();
+        if (diameter <= 0 && (list == null || list.Count == 0)) { SetWindowRgn(hwnd, 0, true); return; }
+
+        var region = diameter > 0
+            ? CreateRoundRectRgn(0, 0, width + 1, height + 1 + diameter, diameter, diameter)
+            : CreateRectRgn(0, 0, width, height);
+        foreach (var h in list ?? new())
+        {
+            var hole = holeDiameter > 0
+                ? CreateRoundRectRgn(h.X, h.Y, h.X + h.W + 1, h.Y + h.H + 1, holeDiameter, holeDiameter)
+                : CreateRectRgn(h.X, h.Y, h.X + h.W, h.Y + h.H);
+            CombineRgn(region, region, hole, RGN_DIFF);
+            DeleteObject(hole);
+        }
+        SetWindowRgn(hwnd, region, true); // the window now owns the region
     }
 
     /// <summary>

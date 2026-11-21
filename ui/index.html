@@ -9,13 +9,66 @@
   <!-- The page (a Chromium view per tab) is placed exactly over this box -->
   <div id="viewport"></div>
 
+  <!-- Bookmarks drawer (opens between the page and the tab rail) -->
+  <aside id="drawer" aria-label="Bookmarks">
+    <div class="drawer-head">
+      <b>Bookmarks</b>
+      <button class="icon-btn small" id="bm-new-folder" title="New folder">
+        <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+      </button>
+      <button class="icon-btn small" id="bm-close" title="Close">
+        <svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg>
+      </button>
+    </div>
+    <input id="bm-search" class="drawer-search" type="search" placeholder="Search bookmarks" spellcheck="false" autocomplete="off">
+    <button id="bm-add" class="drawer-add"></button>
+    <div id="bm-list" class="drawer-list"></div>
+    <p class="drawer-hint">Drag bookmarks onto a folder to file them. Middle-click opens in a new tab.</p>
+  </aside>
+
   <!-- Vertical tabs on the right -->
   <aside id="rail">
-    <div id="tabs" role="tablist" aria-orientation="vertical"></div>
-    <button id="new-tab" class="new-tab" title="New tab (Ctrl+T)">
-      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-    </button>
+    <div class="rail-main">
+      <div id="tabs" role="tablist" aria-orientation="vertical"></div>
+      <button id="new-tab" class="new-tab" title="New tab (Ctrl+T)">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button id="bm-toggle" class="new-tab" title="Bookmarks">
+        <svg viewBox="0 0 24 24"><path d="M7.5 4.5h9v15l-4.5-3.4-4.5 3.4z"/></svg>
+      </button>
+    </div>
+    <div id="sound" hidden>
+      <div class="sound-head" title="Tabs playing sound">
+        <svg viewBox="0 0 24 24"><path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+      </div>
+      <div id="sound-tabs"></div>
+    </div>
+    <div id="drop-line" hidden></div>
   </aside>
+
+  <!-- Dropdowns. The page cuts a hole where one is open, so they appear on top of it. -->
+  <div id="adblock-pop" class="popover" hidden>
+    <div class="pop-head">
+      <svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.4c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.1z"/></svg>
+      <div class="pop-title"><b>Ad blocker</b><small id="ab-site"></small></div>
+      <label class="switch" title="Block ads on this site"><input type="checkbox" id="ab-toggle"><span></span></label>
+    </div>
+    <div class="pop-big" id="ab-count"></div>
+    <div class="pop-list" id="ab-hosts"></div>
+    <div class="pop-foot">
+      <small id="ab-status"></small>
+      <button class="link-btn" id="ab-settings">Settings</button>
+    </div>
+  </div>
+
+  <div id="volume-pop" class="popover" hidden>
+    <button class="pop-tab" id="vol-tab" title="Show this tab"><span class="ico" id="vol-ico"></span><span id="vol-title"></span></button>
+    <div class="vol-row">
+      <button class="icon-btn small" id="vol-mute" title="Mute"></button>
+      <input type="range" id="vol-range" min="0" max="100" step="1">
+      <span class="vol-value" id="vol-value"></span>
+    </div>
+  </div>
 
   <!-- Top toolbar -->
   <header id="bar">

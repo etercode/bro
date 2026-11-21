@@ -11,6 +11,7 @@ sealed class Settings
     public string Accent { get; set; } = "#1e66f5"; // the owl's blue
     public bool NewTabClock { get; set; } = true;
     public bool NewTabBookmarks { get; set; } = true;
+    public bool GroupTabs { get; set; } = true;         // tabs from the same site sit together
     public string DownloadFolder { get; set; } = "";         // "" = the Windows Downloads folder
     public bool AskWhereToSave { get; set; }
     public bool AdBlock { get; set; } = true;
@@ -47,6 +48,7 @@ sealed class Settings
             case "accent" when Accents.Contains(Str()): Accent = Str(); return true;
             case "newTabClock" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: NewTabClock = Bool(); return true;
             case "newTabBookmarks" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: NewTabBookmarks = Bool(); return true;
+            case "groupTabs" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: GroupTabs = Bool(); return true;
             case "askWhereToSave" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: AskWhereToSave = Bool(); return true;
             case "adBlock" when value.ValueKind is JsonValueKind.True or JsonValueKind.False: AdBlock = Bool(); return true;
             case "trackingPrevention" when Str() is "none" or "basic" or "balanced" or "strict": TrackingPrevention = Str(); return true;
@@ -63,6 +65,7 @@ sealed class Settings
         accents = Accents,
         newTabClock = NewTabClock,
         newTabBookmarks = NewTabBookmarks,
+        groupTabs = GroupTabs,
         downloadFolder = EffectiveDownloadFolder,
         askWhereToSave = AskWhereToSave,
         adBlock = AdBlock,

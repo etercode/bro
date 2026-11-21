@@ -22,6 +22,7 @@ public partial class MainWindow
         tab.PageHost = !IsPagesUrl(url) && Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https"
             ? u.Host.ToLowerInvariant() : "";
         tab.Blocked = 0;
+        tab.BlockedHosts.Clear();
         tab.PageAllowed = tab.PageHost.Length == 0 ||
                           AdBlocker.IsPaused(tab.PageHost, Services.Settings.AdBlockPausedSites) ||
                           Services.AdBlock.Engine?.IsPageAllowed(url) == true;
@@ -82,6 +83,8 @@ public partial class MainWindow
         if (!engine.ShouldBlock(url, AdBlocker.TypeOf(e.ResourceContext), tab.PageHost)) return;
         e.Response = _env!.CreateWebResourceResponse(null, 403, "Blocked by bro!", "");
         tab.Blocked++;
+        var host = FilterEngine.HostOf(url);
+        tab.BlockedHosts[host] = tab.BlockedHosts.TryGetValue(host, out var n) ? n + 1 : 1;
         if (tab == _active) QueueState();
     }
 
@@ -98,6 +101,24 @@ public partial class MainWindow
         if (tab == null || tab.PageHost.Length == 0) return "none";
         if (!Services.Settings.AdBlock) return "off";
         return AdBlocker.IsPaused(tab.PageHost, Services.Settings.AdBlockPausedSites) ? "paused" : "on";
+    }
+
+    /// <summary>What the shield's dropdown shows for the current tab.</summary>
+    void SendAdBlockPanel()
+    {
+        if (!_uiReady || UiView.CoreWebView2 == null) return;
+        var tab = _active;
+        var panel = new
+        {
+            type = "adblockPanel",
+            state = ShieldState(tab),
+            site = tab == null ? "" : FilterEngine.SiteOf(tab.PageHost),
+            blocked = tab?.Blocked ?? 0,
+            hosts = (tab?.BlockedHosts ?? new Dictionary<string, int>()).OrderByDescending(h => h.Value).Take(40)
+                        .Select(h => new { host = h.Key, count = h.Value }).ToArray(),
+            status = Services.AdBlock.Status,
+        };
+        UiView.CoreWebView2.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(panel, JsonOpts));
     }
 
     /// <summary>Shield button: pause or resume blocking on the current site, then reload it.</summary>

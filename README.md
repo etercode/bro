@@ -65,6 +65,18 @@ Settings › Import and export (`bro://settings#import`):
 - **Back up and sync:** export one `.json` file with bookmarks, history and settings; import it in Bro on another
   PC. Importing only adds, it never deletes, so you can go back and forth.
 
+## Tabs and sound
+
+- **Groups:** tabs from the same site sit together with a coloured bracket (Settings › Group tabs from the same site).
+- **Drag** a tab up or down to reorder it; drop it outside the window to open it in a new window (the page reloads there).
+- **Sound:** tabs playing audio show a speaker badge (click it to mute) and appear under the speaker icon at the
+  bottom of the rail. Click one there for its volume slider. Volume is applied inside the page
+  (`MainWindow.Sound.cs`), since Chromium itself only offers mute per tab.
+- **Bookmarks drawer:** the bookmark button under "+" opens a drawer with folders. Drag bookmarks onto folders,
+  rename or delete them, and create folders with the folder button.
+- **Dropdowns** (ad blocker, volume) are HTML in `ui/`. Each page is its own native window, so while a dropdown
+  is open the page gets a hole cut in its window shape at that spot (`ClipToRoundedCorners`).
+
 ## Private windows
 
 Ctrl+Shift+N. Uses an InPrivate profile: no history, and cookies/site data are wiped when the last

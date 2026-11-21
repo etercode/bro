@@ -9,14 +9,64 @@ sealed class Bookmark
     public long Added { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 }
 
-/// <summary>Bookmarks, in the order the user arranged them. Saved to bookmarks.json.</summary>
+/// <summary>
+/// Bookmarks, in the order the user arranged them, saved to bookmarks.json. Folder order (and empty
+/// folders) live in bookmark-folders.json; a bookmark's Folder is the folder's name.
+/// </summary>
 sealed class BookmarkStore(string path)
 {
     readonly List<Bookmark> _items = JsonFile.Load(path, () => new List<Bookmark>());
+    readonly string _foldersPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path)!, "bookmark-folders.json");
+    List<string>? _folderOrder;
 
     public event Action? Changed;
 
     public IReadOnlyList<Bookmark> Items => _items;
+
+    List<string> FolderOrder => _folderOrder ??= JsonFile.Load(_foldersPath, () => new List<string>());
+
+    /// <summary>All folders: the user's order first, then any that only exist on bookmarks (e.g. imported).</summary>
+    public List<string> Folders =>
+        FolderOrder.Concat(_items.Select(b => b.Folder)).Where(f => f.Length > 0).Distinct().ToList();
+
+    public string CreateFolder(string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0) name = "New folder";
+        var unique = name;
+        for (int n = 2; Folders.Contains(unique); n++) unique = $"{name} {n}";
+        FolderOrder.Add(unique);
+        Commit();
+        return unique;
+    }
+
+    public void RenameFolder(string from, string to)
+    {
+        to = to.Trim();
+        if (from.Length == 0 || to.Length == 0 || from == to) return;
+        foreach (var b in _items.Where(b => b.Folder == from)) b.Folder = to;
+        var order = FolderOrder;
+        var i = order.IndexOf(from);
+        if (i >= 0) { if (order.Contains(to)) order.RemoveAt(i); else order[i] = to; }
+        Commit();
+    }
+
+    /// <summary>Deletes the folder; its bookmarks move out of it (they aren't deleted).</summary>
+    public void DeleteFolder(string name)
+    {
+        foreach (var b in _items.Where(b => b.Folder == name)) b.Folder = "";
+        FolderOrder.Remove(name);
+        Commit();
+    }
+
+    /// <summary>Saves the current page into a folder (or moves it there if it's already saved).</summary>
+    public void AddTo(string url, string title, string folder)
+    {
+        var b = Find(url);
+        if (b == null) _items.Add(new Bookmark { Url = url, Title = title, Folder = folder });
+        else b.Folder = folder;
+        Commit();
+    }
 
     public bool Contains(string url) => Find(url) != null;
 
@@ -83,6 +133,7 @@ sealed class BookmarkStore(string path)
     void Commit()
     {
         JsonFile.Save(path, _items);
+        if (_folderOrder != null) JsonFile.Save(_foldersPath, _folderOrder.Where(f => f.Length > 0).Distinct().ToList());
         Changed?.Invoke();
     }
 

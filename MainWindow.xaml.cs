@@ -57,7 +57,7 @@ public partial class MainWindow : Window
         };
         Loaded += async (_, _) => await InitializeAsync();
         StateChanged += (_, _) => { ApplyWindowStateLayout(); QueueState(); };
-        Deactivated += (_, _) => { MenuPopup.IsOpen = false; CloseSuggestions(); };
+        Deactivated += (_, _) => { MenuPopup.IsOpen = false; CloseSuggestions(); ClosePopovers(); };
         LocationChanged += (_, _) => CloseSuggestions();
         Root.SizeChanged += (_, _) => { if (_fullscreen) LayoutTabHost(); };
         Closing += (_, _) => OnClosing();
@@ -204,6 +204,7 @@ public partial class MainWindow : Window
         core.SourceChanged += (_, e) =>
         {
             tab.Url = core.Source;
+            UpdateTabSite(tab);
             if (!e.IsNewDocument && !IsPrivate) Services.History.Add(core.Source, core.DocumentTitle);
             QueueState();
         };
@@ -235,6 +236,7 @@ public partial class MainWindow : Window
         };
         core.WebMessageReceived += (_, e) => OnPageMessage(core, e);
         SetupAdBlock(tab, core);
+        SetupSound(tab, core);
 
         ClipToRoundedCorners(view);
         if (tab == _active) Native.BringToTop(view.Handle);
@@ -297,6 +299,7 @@ public partial class MainWindow : Window
         foreach (var t in _tabs)
             t.View.Visibility = t == tab ? Visibility.Visible : Visibility.Collapsed;
         Native.BringToTop(tab.View.Handle);
+        ClipToRoundedCorners(tab.View);
         CloseSuggestions();
         QueueState();
     }
@@ -497,7 +500,12 @@ public partial class MainWindow : Window
         var state = new
         {
             type = "state",
-            tabs = _tabs.Select(t => new { id = t.Id, title = DisplayTitle(t), favicon = t.Favicon, loading = t.Loading, active = t == _active }),
+            tabs = _tabs.Select(t => new
+            {
+                id = t.Id, title = DisplayTitle(t), favicon = t.Favicon, loading = t.Loading, active = t == _active,
+                audible = t.Audible, muted = t.Muted, volume = t.Volume, site = t.Site,
+            }),
+            groupTabs = Services.Settings.GroupTabs,
             url = _active?.Url ?? "",
             loading = _active?.Loading ?? false,
             canBack = core?.CanGoBack ?? false,
@@ -568,7 +576,64 @@ public partial class MainWindow : Window
             case "suggest": ShowSuggestions(Str("text"), Num("x"), Num("y"), Num("w")); break;
             case "suggestMove": MoveSuggestion((int)Num("delta")); break;
             case "suggestClose": CloseSuggestions(); break;
+            case "overlays": SetOverlays(msg.TryGetProperty("rects", out var rects) ? rects : default); break;
+
+            // Sound
+            case "mute": if (FindTab((int)Num("id")) is { } toMute) SetMuted(toMute, Flag("muted")); break;
+            case "volume": if (FindTab((int)Num("id")) is { } toLevel) SetVolume(toLevel, Num("level")); break;
+
+            // Tab order
+            case "moveTab": MoveTab((int)Num("id"), (int)Num("index")); break;
+            case "detachTab": DetachTab((int)Num("id")); break;
+
+            // Ad blocker dropdown
+            case "adblockPanel": SendAdBlockPanel(); break;
+            case "adblockEnable":
+                Services.Settings.AdBlock = true;
+                Services.SaveSettings();
+                _active?.View.CoreWebView2?.Reload();
+                break;
+            case "openSettings": OpenPage("settings"); break;
+
+            // Bookmarks drawer
+            case "getBookmarks": SendBookmarksToUi(); break;
+            case "openUrl": OpenUrl(Str("url"), Flag("newTab")); break;
+            case "addBookmark":
+                if (_active != null && CanBookmark(_active.Url))
+                {
+                    if (_active.Favicon.Length > 0) Services.Favicons.Set(_active.Url, _active.Favicon);
+                    Services.Bookmarks.AddTo(_active.Url, DisplayTitle(_active), Str("folder"));
+                }
+                break;
+            case "removeBookmark": Services.Bookmarks.Remove(Str("id")); break;
+            case "updateBookmark": Services.Bookmarks.Update(Str("id"), Str("title"), Str("url"), Str("folder")); break;
+            case "moveBookmark": Services.Bookmarks.Move(Str("id"), Str("beforeId"), Str("folder")); break;
+            case "createFolder": Services.Bookmarks.CreateFolder(Str("name")); break;
+            case "renameFolder": Services.Bookmarks.RenameFolder(Str("name"), Str("newName")); break;
+            case "deleteFolder": Services.Bookmarks.DeleteFolder(Str("name")); break;
         }
+
+        bool Flag(string name) => msg.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
+    }
+
+    void OpenUrl(string url, bool newTab)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme is not ("http" or "https" or "file")) return;
+        if (newTab || _active?.View.CoreWebView2 is not { } core) _ = CreateTabAsync(u.ToString(), activate: !newTab);
+        else { core.Navigate(u.ToString()); _active.View.Focus(); }
+    }
+
+    void SendBookmarksToUi()
+    {
+        if (!_uiReady || UiView.CoreWebView2 == null) return;
+        var payload = new
+        {
+            type = "bookmarks",
+            items = Services.Bookmarks.ToJson(Services.Favicons),
+            folders = Services.Bookmarks.Folders,
+            current = _active != null && CanBookmark(_active.Url) ? _active.Url : "",
+        };
+        UiView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(payload, JsonOpts));
     }
 
     // ───────────────────────── shared data changed ─────────────────────────
@@ -576,6 +641,7 @@ public partial class MainWindow : Window
     void OnBookmarksChanged()
     {
         QueueState();
+        SendBookmarksToUi();
         BroadcastToPages("bookmarks");
     }
 
@@ -624,15 +690,42 @@ public partial class MainWindow : Window
         TabHost.Height = _viewport.Height;
     }
 
-    /// <summary>Rounds the page's corners (a native child window can't be clipped by WPF).</summary>
+    /// <summary>
+    /// Rounds the page's corners (a native child window can't be clipped by WPF), and cuts holes where
+    /// the UI has a dropdown open, so HTML dropdowns can appear "over" the page.
+    /// </summary>
     void ClipToRoundedCorners(WebView2 view)
     {
         if (PresentationSource.FromVisual(view)?.CompositionTarget is not { } target) return;
         var m = target.TransformToDevice;
+        var holes = _fullscreen ? null : _overlays.Select(r => (
+            (int)Math.Floor((r.X - _viewport.X) * m.M11), (int)Math.Floor((r.Y - _viewport.Y) * m.M22),
+            (int)Math.Ceiling(r.Width * m.M11) + 1, (int)Math.Ceiling(r.Height * m.M22) + 1));
         Native.ClipRounded(view.Handle,
                            (int)Math.Round(view.ActualWidth * m.M11),
                            (int)Math.Round(view.ActualHeight * m.M22),
-                           _fullscreen ? 0 : (int)Math.Round(PageCornerRadius * 2 * m.M11));
+                           _fullscreen ? 0 : (int)Math.Round(PageCornerRadius * 2 * m.M11),
+                           holes, (int)Math.Round(28 * m.M11)); // dropdowns have 14px corners
+    }
+
+    /// <summary>Dropdowns currently open in the UI (UI coordinates).</summary>
+    List<Rect> _overlays = new();
+
+    void SetOverlays(JsonElement rects)
+    {
+        var list = new List<Rect>();
+        if (rects.ValueKind == JsonValueKind.Array)
+            foreach (var r in rects.EnumerateArray())
+                if (r.ValueKind == JsonValueKind.Object)
+                    list.Add(new Rect(r.GetProperty("x").GetDouble(), r.GetProperty("y").GetDouble(),
+                                      Math.Max(0, r.GetProperty("w").GetDouble()), Math.Max(0, r.GetProperty("h").GetDouble())));
+        _overlays = list;
+        if (_active != null) ClipToRoundedCorners(_active.View);
+    }
+
+    void ClosePopovers()
+    {
+        if (_uiReady && !_closing) UiView.CoreWebView2?.PostWebMessageAsJson("{\"type\":\"closePopovers\"}");
     }
 
     nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
