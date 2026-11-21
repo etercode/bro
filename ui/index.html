@@ -61,6 +61,15 @@
     </div>
   </div>
 
+  <div id="zoom-pop" class="popover" hidden>
+    <div class="zoom-row">
+      <button class="icon-btn small" id="zoom-out" title="Zoom out (Ctrl+minus)"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      <span class="value" id="zoom-pop-value">100%</span>
+      <button class="icon-btn small" id="zoom-in" title="Zoom in (Ctrl+plus)"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+      <button class="reset" id="zoom-reset" title="Reset (Ctrl+0)">Reset</button>
+    </div>
+  </div>
+
   <div id="volume-pop" class="popover" hidden>
     <button class="pop-tab" id="vol-tab" title="Show this tab"><span class="ico" id="vol-ico"></span><span id="vol-title"></span></button>
     <div class="vol-row">
@@ -93,6 +102,10 @@
         <input id="addr-input" spellcheck="false" autocomplete="off" placeholder="Search or enter address">
         <span id="addr-display" aria-hidden="true"></span>
       </span>
+      <button id="zoom" class="zoom-btn" type="button" title="Zoom" hidden>
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.5h5"/><path class="plus" d="M10.5 8v5"/></svg>
+        <span id="zoom-value">100%</span>
+      </button>
     </label>
 
     <div class="tools">

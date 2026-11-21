@@ -59,6 +59,30 @@ sealed class BookmarkStore(string path)
         Commit();
     }
 
+    /// <summary>
+    /// Dropping one bookmark onto another: if the target is in a folder, the dragged one joins it;
+    /// otherwise both go into a new folder. Returns the folder's name.
+    /// </summary>
+    public string Group(string targetId, string draggedId)
+    {
+        var target = _items.FirstOrDefault(b => b.Id == targetId);
+        var dragged = _items.FirstOrDefault(b => b.Id == draggedId);
+        if (target == null || dragged == null || target == dragged) return "";
+        var folder = target.Folder;
+        if (folder.Length == 0)
+        {
+            folder = "New folder";
+            for (int n = 2; Folders.Contains(folder); n++) folder = $"New folder {n}";
+            FolderOrder.Add(folder);
+            target.Folder = folder;
+        }
+        _items.Remove(dragged);
+        dragged.Folder = folder;
+        _items.Insert(_items.IndexOf(target) + 1, dragged);
+        Commit();
+        return folder;
+    }
+
     /// <summary>Saves the current page into a folder (or moves it there if it's already saved).</summary>
     public void AddTo(string url, string title, string folder)
     {

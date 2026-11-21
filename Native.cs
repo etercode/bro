@@ -34,6 +34,16 @@ static class Native
 
     public static (int X, int Y) CursorPosition() { GetCursorPos(out var p); return (p.X, p.Y); }
 
+    [DllImport("user32.dll")] static extern bool GetWindowRect(nint hwnd, out RECT rect);
+
+    /// <summary>Is the mouse outside this window (e.g. a tab was dropped outside it)?</summary>
+    public static bool IsCursorOutside(nint hwnd)
+    {
+        GetCursorPos(out var p);
+        if (!GetWindowRect(hwnd, out var r)) return false;
+        return p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom;
+    }
+
     /// <summary>Starts a native window move, as if the user grabbed a title bar.</summary>
     public static void BeginWindowDrag(nint hwnd)
     {

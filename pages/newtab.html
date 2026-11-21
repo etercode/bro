@@ -161,7 +161,15 @@
       display: none; margin-top: 14px; font-size: 13px; color: rgba(244, 237, 230, .55); text-decoration: none;
     }
     .all-marks:hover { color: rgba(244, 237, 230, .9); }
-    .marks:not(:empty) + .all-marks { display: inline-block; }
+    .marks:not(:empty) + .mark-links { display: flex; }
+    .mark-links { display: none; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; }
+    .mark-links .all-marks { display: inline-block; margin: 0; }
+    .mark-links .dot { color: rgba(244, 237, 230, .3); font-size: 13px; }
+    .hide-marks {
+      padding: 0; border: 0; background: none; cursor: pointer;
+      font: inherit; font-size: 13px; color: rgba(244, 237, 230, .4);
+    }
+    .hide-marks:hover { color: rgba(244, 237, 230, .85); text-decoration: underline; }
 
     main { animation: rise .9s cubic-bezier(.2, .7, .2, 1) both; }
     @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
@@ -193,7 +201,11 @@
     <p class="private-note">Pages you visit in this window aren't added to history, and cookies and site data are deleted
       when you close all private windows. Bookmarks and downloads you make are still kept.</p>
     <nav class="marks" id="marks" aria-label="Bookmarks"></nav>
-    <a class="all-marks" href="bookmarks.html">All bookmarks →</a>
+    <div class="mark-links">
+      <a class="all-marks" href="bookmarks.html">All bookmarks →</a>
+      <span class="dot">·</span>
+      <button class="hide-marks" id="hide-marks" title="Show them again in Settings › Bookmarks on new tabs">hide</button>
+    </div>
   </main>
 
   <div class="hint">↑ Search or type an address above</div>
@@ -244,6 +256,8 @@
       showMarks = m.settings.newTabBookmarks;
       renderMarks();
     });
+    document.getElementById('hide-marks').addEventListener('click', () =>
+      bro.send('setSetting', { key: 'newTabBookmarks', value: false }));
     bro.get('settings', 'bookmarks');
   </script>
 </body>

@@ -150,9 +150,11 @@ let drag = null;
 tabsEl.addEventListener('pointerdown', (e) => {
   const chip = e.target.closest('.chip');
   if (!chip || e.button !== 0 || e.target.closest('.x, .snd')) return;
+  e.preventDefault(); // otherwise grabbing the site icon starts the browser's own image drag
   drag = { id: Number(chip.dataset.id), chip, x: e.clientX, y: e.clientY, moved: false, index: -1, outside: false };
   chip.setPointerCapture(e.pointerId);
 });
+tabsEl.addEventListener('dragstart', (e) => e.preventDefault());
 
 tabsEl.addEventListener('pointermove', (e) => {
   if (!drag) return;
@@ -176,7 +178,7 @@ tabsEl.addEventListener('pointermove', (e) => {
   dropLine.hidden = false;
 });
 
-function endDrag(commit) {
+function endDrag(commit, e) {
   if (!drag) return;
   const d = drag;
   drag = null;
@@ -187,12 +189,17 @@ function endDrag(commit) {
   if (!d.moved || !commit) return;
   suppressClick = true;
   setTimeout(() => { suppressClick = false; }, 0);
-  if (d.outside) { post('detachTab', { id: d.id }); return; }
+  // Released inside the window = reorder. Otherwise C# checks where the mouse really is:
+  // outside the window opens the tab in a new window.
+  const inside = e && e.type === 'pointerup' &&
+    e.clientX >= 0 && e.clientY >= 0 && e.clientX < innerWidth && e.clientY < innerHeight;
   const from = state.tabs.findIndex((t) => t.id === d.id);
-  if (d.index >= 0 && d.index !== from) post('moveTab', { id: d.id, index: d.index });
+  post('dropTab', { id: d.id, index: d.index >= 0 && d.index !== from ? d.index : -1, inside });
 }
-tabsEl.addEventListener('pointerup', () => endDrag(true));
-tabsEl.addEventListener('pointercancel', () => endDrag(false));
+tabsEl.addEventListener('pointerup', (e) => endDrag(true, e));
+// If the mouse leaves the window the browser may drop the capture; treat that as the drop
+tabsEl.addEventListener('lostpointercapture', (e) => endDrag(true, e));
+tabsEl.addEventListener('pointercancel', (e) => endDrag(true, e));
 
 // ── sound: tabs playing audio, listed at the bottom of the rail ──────────────
 
@@ -247,7 +254,7 @@ function closePopovers(except) {
 
 popovers.forEach((p) => new ResizeObserver(() => { if (isOpen(p)) reportOverlays(); }).observe(p));
 document.addEventListener('pointerdown', (e) => {
-  if (!e.target.closest('.popover, #shield, .snd-chip')) closePopovers();
+  if (!e.target.closest('.popover, #shield, .snd-chip, #zoom')) closePopovers();
 });
 window.addEventListener('blur', () => closePopovers()); // clicked into the page
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePopovers(); });
@@ -305,6 +312,31 @@ function renderAdblockPanel(m) {
 
 $('#ab-toggle').addEventListener('change', () => { post('shield'); setTimeout(() => post('adblockPanel'), 400); });
 $('#ab-settings').addEventListener('click', () => { post('openSettings'); closePopovers(); });
+
+// Zoom: a magnifier with the level appears in the address bar when the page isn't at 100%
+const zoomPop = $('#zoom-pop');
+const zoomText = () => `${Math.round((state.zoom || 1) * 100)}%`;
+function renderZoom() {
+  const zoomed = Math.abs((state.zoom || 1) - 1) > 0.001;
+  const btn = $('#zoom');
+  btn.hidden = !zoomed;
+  $('#zoom-value').textContent = zoomText();
+  btn.querySelector('.plus').style.display = (state.zoom || 1) > 1 ? '' : 'none';
+  $('#zoom-pop-value').textContent = zoomText();
+  if (!zoomed && isOpen(zoomPop) && !zoomPop.contains(document.activeElement)) { /* keep open while using it */ }
+}
+$('#zoom').addEventListener('click', (e) => {
+  e.preventDefault(); // it sits inside the address bar's label
+  if (isOpen(zoomPop)) { closePopovers(); return; }
+  const r = $('#zoom').getBoundingClientRect();
+  openPopover(zoomPop);
+  zoomPop.style.left = `${Math.max(8, r.right - zoomPop.offsetWidth)}px`;
+  zoomPop.style.top = `${r.bottom + 12}px`;
+  reportOverlays();
+});
+$('#zoom-in').addEventListener('click', () => post('zoomStep', { delta: 1 }));
+$('#zoom-out').addEventListener('click', () => post('zoomStep', { delta: -1 }));
+$('#zoom-reset').addEventListener('click', () => { post('zoom', { factor: 1 }); closePopovers(); });
 
 // Volume dropdown (from the sound section)
 const volPop = $('#volume-pop');
@@ -426,6 +458,57 @@ function inlineInput(value, onDone) {
   return input;
 }
 
+function clearDropMarks() {
+  bmList.querySelectorAll('.drop, .drop-before, .drop-after, .drop-into').forEach((n) =>
+    n.classList.remove('drop', 'drop-before', 'drop-after', 'drop-into'));
+}
+
+/** Top edge = put before, bottom edge = put after, middle = combine into a folder. */
+function dropZone(e, row) {
+  const r = row.getBoundingClientRect();
+  const y = (e.clientY - r.top) / r.height;
+  return y < 0.3 ? 'before' : y > 0.7 ? 'after' : 'into';
+}
+
+/** The bookmark that comes after b in the saved order (skipping the one being dragged). */
+function idAfter(b) {
+  const i = bm.items.findIndex((x) => x.id === b.id);
+  const next = bm.items.slice(i + 1).find((x) => x.id !== dragBm.id);
+  return next ? next.id : '';
+}
+
+function openEditor(row, b) {
+  row.draggable = false;
+  row.classList.add('editing');
+  const name = document.createElement('input');
+  name.className = 'bm-field';
+  name.value = b.title;
+  name.placeholder = 'Name';
+  const url = document.createElement('input');
+  url.className = 'bm-field';
+  url.value = b.url;
+  url.placeholder = 'Address';
+  url.spellcheck = false;
+  const save = () => post('updateBookmark', { id: b.id, title: name.value.trim() || b.title, url: url.value.trim() || b.url, folder: b.folder });
+  const buttons = document.createElement('div');
+  buttons.className = 'bm-edit-buttons';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); renderDrawer(); });
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'primary';
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); save(); });
+  buttons.append(cancelBtn, saveBtn);
+  row.replaceChildren(name, url, buttons);
+  row.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') save();
+    else if (e.key === 'Escape') renderDrawer();
+  });
+  setTimeout(() => { name.focus(); name.select(); }, 0);
+}
+
 function itemNode(b) {
   const row = document.createElement('div');
   row.className = 'bm-item' + (flashUrl && b.url === flashUrl ? ' flash' : '');
@@ -437,26 +520,44 @@ function itemNode(b) {
   const actions = document.createElement('span');
   actions.className = 'bm-actions';
   actions.append(
-    actionButton(ICON_SVG.edit, 'Rename', () => {
-      title.replaceWith(inlineInput(b.title, (v) => {
-        if (v) post('updateBookmark', { id: b.id, title: v, url: b.url, folder: b.folder });
-        else renderDrawer();
-      }));
-    }),
+    actionButton(ICON_SVG.edit, 'Edit name and address', () => openEditor(row, b)),
     actionButton(ICON_SVG.trash, 'Delete bookmark', () => post('removeBookmark', { id: b.id })));
   row.append(favNode(b), title, actions);
 
-  row.addEventListener('click', (e) => post('openUrl', { url: b.url, newTab: e.ctrlKey }));
+  row.addEventListener('click', (e) => { if (!row.classList.contains('editing')) post('openUrl', { url: b.url, newTab: e.ctrlKey }); });
   row.addEventListener('auxclick', (e) => { if (e.button === 1) post('openUrl', { url: b.url, newTab: true }); });
   row.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-  row.addEventListener('dragstart', (e) => { dragBm = b.id; e.dataTransfer.effectAllowed = 'move'; });
-  row.addEventListener('dragend', () => { dragBm = null; bmList.querySelectorAll('.drop, .drop-before').forEach((n) => n.classList.remove('drop', 'drop-before')); });
-  row.addEventListener('dragover', (e) => { if (dragBm && dragBm !== b.id) { e.preventDefault(); e.stopPropagation(); row.classList.add('drop-before'); } });
-  row.addEventListener('dragleave', () => row.classList.remove('drop-before'));
+  row.addEventListener('dragstart', (e) => {
+    dragBm = b;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', b.url);
+    document.body.classList.add('bm-dragging');
+    document.body.classList.toggle('bm-dragging-filed', Boolean(b.folder));
+  });
+  row.addEventListener('dragend', () => {
+    dragBm = null;
+    clearDropMarks();
+    document.body.classList.remove('bm-dragging', 'bm-dragging-filed');
+  });
+  row.addEventListener('dragover', (e) => {
+    if (!dragBm || dragBm.id === b.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = dropZone(e, row);
+    row.classList.toggle('drop-before', zone === 'before');
+    row.classList.toggle('drop-after', zone === 'after');
+    row.classList.toggle('drop-into', zone === 'into');
+  });
+  row.addEventListener('dragleave', (e) => {
+    if (!row.contains(e.relatedTarget)) row.classList.remove('drop-before', 'drop-after', 'drop-into');
+  });
   row.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (dragBm && dragBm !== b.id) post('moveBookmark', { id: dragBm, beforeId: b.id, folder: b.folder });
+    if (!dragBm || dragBm.id === b.id) return;
+    const zone = dropZone(e, row);
+    if (zone === 'into') post('groupBookmarks', { id: dragBm.id, targetId: b.id });
+    else post('moveBookmark', { id: dragBm.id, beforeId: zone === 'before' ? b.id : idAfter(b), folder: b.folder });
   });
   return row;
 }
@@ -476,13 +577,17 @@ function folderNode(name, items, searching) {
     count.textContent = items.length;
     const actions = document.createElement('span');
     actions.className = 'bm-actions';
+    const rename = () => {
+      if (!label.isConnected) return;
+      label.replaceWith(inlineInput(name, (v) => {
+        if (v && v !== name) post('renameFolder', { name, newName: v });
+        else renderDrawer();
+      }));
+    };
+    box.dataset.folder = name;
+    box.startRename = rename;
     actions.append(
-      actionButton(ICON_SVG.edit, 'Rename folder', () => {
-        label.replaceWith(inlineInput(name, (v) => {
-          if (v && v !== name) post('renameFolder', { name, newName: v });
-          else renderDrawer();
-        }));
-      }),
+      actionButton(ICON_SVG.edit, 'Rename folder', rename),
       actionButton(ICON_SVG.trash, 'Delete folder (its bookmarks move out of it)', () => post('deleteFolder', { name })));
     head.append(label, count, actions);
     head.addEventListener('click', () => {
@@ -503,9 +608,25 @@ function folderNode(name, items, searching) {
   box.addEventListener('drop', (e) => {
     e.preventDefault();
     box.classList.remove('drop');
-    if (dragBm) post('moveBookmark', { id: dragBm, beforeId: '', folder: name });
+    if (dragBm && dragBm.folder !== name) post('moveBookmark', { id: dragBm.id, beforeId: '', folder: name });
   });
   return box;
+}
+
+/** Shown while dragging a bookmark that's in a folder: drop here to take it out. */
+function outZone() {
+  const zone = document.createElement('div');
+  zone.className = 'bm-out';
+  zone.textContent = 'Drop here to move out of the folder';
+  zone.addEventListener('dragover', (e) => { if (dragBm) { e.preventDefault(); zone.classList.add('drop'); } });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drop'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (!dragBm) return;
+    const firstTop = bm.items.find((x) => !x.folder && x.id !== dragBm.id);
+    post('moveBookmark', { id: dragBm.id, beforeId: firstTop ? firstTop.id : '', folder: '' });
+  });
+  return zone;
 }
 
 function renderDrawer() {
@@ -526,6 +647,7 @@ function renderDrawer() {
     nodes.push(row);
   }
 
+  nodes.push(outZone());
   const top = bm.items.filter((b) => !b.folder && match(b));
   nodes.push(folderNode('', top, searching));
   for (const f of bm.folders) {
@@ -541,7 +663,15 @@ function renderDrawer() {
   }
   bmList.replaceChildren(...nodes);
   if (flashUrl) setTimeout(() => { flashUrl = ''; }, 1700);
+
+  // Two bookmarks were just dropped together: let the user name the new folder right away
+  if (pendingRename) {
+    const box = [...bmList.querySelectorAll('.bm-folder')].find((n) => n.dataset.folder === pendingRename);
+    pendingRename = '';
+    if (box && box.startRename) setTimeout(box.startRename, 0);
+  }
 }
+let pendingRename = '';
 
 // ── address bar ───────────────────────────────────────────────────────────
 
@@ -685,6 +815,7 @@ function render() {
   renderShield();
   renderDownloads();
   renderSound();
+  renderZoom();
   if (drawerOpen) renderDrawerAdd();
   if (isOpen(volPop)) fillVolume(false);
   // Keep the ad blocker dropdown's numbers live (at most twice a second)
@@ -746,7 +877,11 @@ if (webview) {
     else if (msg.type === 'blurAddress') input.blur();
     else if (msg.type === 'closePopovers') closePopovers();
     else if (msg.type === 'adblockPanel') renderAdblockPanel(msg);
-    else if (msg.type === 'bookmarks') { bm = msg; renderDrawer(); }
+    else if (msg.type === 'bookmarks') {
+      bm = msg;
+      if (msg.renameFolder && msg.renameFolder.startsWith('New folder')) { pendingRename = msg.renameFolder; collapsed.delete(msg.renameFolder); }
+      renderDrawer();
+    }
   });
 }
 

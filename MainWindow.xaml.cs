@@ -181,6 +181,7 @@ public partial class MainWindow : Window
         TabHost.Children.Add(view);
         view.Visibility = Visibility.Collapsed;
         view.SizeChanged += (_, _) => ClipToRoundedCorners(view);
+        view.ZoomFactorChanged += (_, _) => { if (tab == _active) QueueState(); };
         if (activate) Activate(tab);
         else QueueState();
 
@@ -506,6 +507,7 @@ public partial class MainWindow : Window
                 audible = t.Audible, muted = t.Muted, volume = t.Volume, site = t.Site,
             }),
             groupTabs = Services.Settings.GroupTabs,
+            zoom = Math.Round(_active?.View.ZoomFactor ?? 1, 3),
             url = _active?.Url ?? "",
             loading = _active?.Loading ?? false,
             canBack = core?.CanGoBack ?? false,
@@ -585,6 +587,15 @@ public partial class MainWindow : Window
             // Tab order
             case "moveTab": MoveTab((int)Num("id"), (int)Num("index")); break;
             case "detachTab": DetachTab((int)Num("id")); break;
+            case "dropTab":
+                // Dropped outside the window → its own window; otherwise a new position
+                if (!Flag("inside") && Native.IsCursorOutside(Hwnd)) DetachTab((int)Num("id"));
+                else if (Num("index") >= 0) MoveTab((int)Num("id"), (int)Num("index"));
+                break;
+
+            // Zoom (Ctrl + scroll / Ctrl + plus/minus work inside the page too)
+            case "zoom": SetZoom(Num("factor")); break;
+            case "zoomStep": SetZoom(ZoomStep((_active?.View.ZoomFactor ?? 1), (int)Num("delta"))); break;
 
             // Ad blocker dropdown
             case "adblockPanel": SendAdBlockPanel(); break;
@@ -608,6 +619,10 @@ public partial class MainWindow : Window
             case "removeBookmark": Services.Bookmarks.Remove(Str("id")); break;
             case "updateBookmark": Services.Bookmarks.Update(Str("id"), Str("title"), Str("url"), Str("folder")); break;
             case "moveBookmark": Services.Bookmarks.Move(Str("id"), Str("beforeId"), Str("folder")); break;
+            case "groupBookmarks":
+                _renameFolderHint = Services.Bookmarks.Group(Str("targetId"), Str("id"));
+                SendBookmarksToUi(); // in case nothing changed
+                break;
             case "createFolder": Services.Bookmarks.CreateFolder(Str("name")); break;
             case "renameFolder": Services.Bookmarks.RenameFolder(Str("name"), Str("newName")); break;
             case "deleteFolder": Services.Bookmarks.DeleteFolder(Str("name")); break;
@@ -623,6 +638,25 @@ public partial class MainWindow : Window
         else { core.Navigate(u.ToString()); _active.View.Focus(); }
     }
 
+    string _renameFolderHint = "";
+
+    static readonly double[] ZoomLevels = { .25, .33, .5, .67, .75, .8, .9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5 };
+
+    static double ZoomStep(double current, int delta)
+    {
+        if (delta == 0) return 1;
+        return delta > 0
+            ? ZoomLevels.FirstOrDefault(z => z > current + 0.001, ZoomLevels[^1])
+            : ZoomLevels.LastOrDefault(z => z < current - 0.001, ZoomLevels[0]);
+    }
+
+    void SetZoom(double factor)
+    {
+        if (_active == null || factor <= 0) return;
+        _active.View.ZoomFactor = Math.Clamp(factor, ZoomLevels[0], ZoomLevels[^1]);
+        QueueState();
+    }
+
     void SendBookmarksToUi()
     {
         if (!_uiReady || UiView.CoreWebView2 == null) return;
@@ -632,7 +666,9 @@ public partial class MainWindow : Window
             items = Services.Bookmarks.ToJson(Services.Favicons),
             folders = Services.Bookmarks.Folders,
             current = _active != null && CanBookmark(_active.Url) ? _active.Url : "",
+            renameFolder = _renameFolderHint, // a folder just made by dropping bookmarks together
         };
+        _renameFolderHint = "";
         UiView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(payload, JsonOpts));
     }
 
@@ -848,6 +884,9 @@ public partial class MainWindow : Window
         else if (key == Key.F5 || (ctrl && key == Key.R)) core?.Reload();
         else if (alt && key == Key.Left) { if (core?.CanGoBack == true) core.GoBack(); }
         else if (alt && key == Key.Right) { if (core?.CanGoForward == true) core.GoForward(); }
+        else if (ctrl && key is Key.OemPlus or Key.Add) SetZoom(ZoomStep(_active?.View.ZoomFactor ?? 1, 1));
+        else if (ctrl && key is Key.OemMinus or Key.Subtract) SetZoom(ZoomStep(_active?.View.ZoomFactor ?? 1, -1));
+        else if (ctrl && key is Key.D0 or Key.NumPad0) SetZoom(1);
         else if (key == Key.F12) core?.OpenDevToolsWindow();
         else if (key == Key.F11) SetFullscreen(!_fullscreen);
         else if (key == Key.Escape && _fullscreen) SetFullscreen(false);
