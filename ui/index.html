@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>bro!</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- The page (a Chromium view per tab) is placed exactly over this box -->
+  <div id="viewport"></div>
+
+  <!-- Vertical tabs on the right -->
+  <aside id="rail">
+    <div id="tabs" role="tablist" aria-orientation="vertical"></div>
+    <button id="new-tab" class="new-tab" title="New tab (Ctrl+T)">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </aside>
+
+  <!-- Top toolbar -->
+  <header id="bar">
+    <div class="brand"><img class="logo" src="logo.png" alt="">bro!<span class="private-tag" title="Private window">private</span></div>
+
+    <nav class="nav">
+      <button id="back" class="icon-btn" title="Back (Alt+Left)">
+        <svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+      </button>
+      <button id="forward" class="icon-btn" title="Forward (Alt+Right)">
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+      <button id="reload" class="icon-btn" title="Reload (F5)">
+        <svg class="i-reload" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.5H15"/></svg>
+        <svg class="i-stop" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>
+      </button>
+    </nav>
+
+    <label class="addr" id="addr">
+      <span class="addr-icon" id="addr-icon"></span>
+      <span class="addr-field">
+        <input id="addr-input" spellcheck="false" autocomplete="off" placeholder="Search or enter address">
+        <span id="addr-display" aria-hidden="true"></span>
+      </span>
+    </label>
+
+    <div class="tools">
+      <button id="bookmark" class="icon-btn" title="Bookmark this page (Ctrl+D)">
+        <svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg>
+      </button>
+      <button id="shield" class="icon-btn" title="Ad blocker">
+        <svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.4c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.1z"/><path class="slash" d="M5 5l14 14"/></svg>
+        <span class="count" id="blocked"></span>
+      </button>
+      <button id="downloads" class="icon-btn" title="Downloads (Ctrl+J)">
+        <svg viewBox="0 0 24 24"><path d="M12 4.5v10M7.5 10.5l4.5 4.5 4.5-4.5M5.5 19.5h13"/></svg>
+        <svg class="ring" viewBox="0 0 44 44"><circle cx="22" cy="22" r="19.5" pathLength="100"/></svg>
+      </button>
+      <button id="more" class="icon-btn" title="Menu">
+        <svg viewBox="0 0 24 24" class="filled"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      </button>
+    </div>
+
+    <!-- Window buttons -->
+    <div class="window-btns">
+      <button data-cmd="minimize" title="Minimize">
+        <svg viewBox="0 0 16 16"><path d="M3.5 8h9"/></svg>
+      </button>
+      <button data-cmd="toggleMax" id="max-btn" title="Maximize">
+        <svg class="i-max" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg>
+        <svg class="i-restore" viewBox="0 0 16 16"><rect x="3.5" y="5.5" width="7" height="7" rx="1.5"/><path d="M5.5 5.5v-.5a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-.5"/></svg>
+      </button>
+      <button data-cmd="close" class="close" title="Close">
+        <svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Settings</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    section { scroll-margin-top: 24px; }
+    .set { display: flex; align-items: center; gap: 20px; min-height: 64px; padding: 12px 18px; border-top: 1px solid var(--line); }
+    .set:first-child { border-top: 0; }
+    .set .label { flex: 1; min-width: 0; }
+    .set .label b { display: block; font-weight: 500; }
+    .set .label small { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
+    .set select.input { min-width: 200px; }
+    .path { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; }
+
+    .swatches { display: flex; gap: 10px; }
+    .swatch { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; outline-offset: 3px; }
+    .swatch.on { outline: 2px solid var(--text); }
+
+    .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--input); border: 1px solid var(--line); }
+    .seg button { height: 30px; padding: 0 14px; border: 0; border-radius: 7px; background: none; color: var(--text-2); }
+    .seg button.on { background: var(--card-hover); color: var(--text); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 18px 16px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--input); border: 1px solid var(--line); font-size: 13px; }
+    .chip .icon-btn { width: 22px; height: 22px; }
+    .chip .icon-btn svg { width: 14px; height: 14px; }
+
+    .checks { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+    .checks label { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); }
+    .checks input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+    .done { color: #6fcf7f; font-size: 13px; }
+    kbd { font: 12px ui-monospace, Consolas, monospace; padding: 2px 6px; border-radius: 5px; background: var(--input); border: 1px solid var(--line); }
+    .keys { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 30px; padding: 16px 18px; color: var(--text-2); font-size: 13px; }
+    .keys div { display: flex; justify-content: space-between; gap: 12px; }
+  </style>
+</head>
+<body>
+  <nav class="side">
+    <div class="brand"><img src="logo.png" alt="">bro!</div>
+    <a href="history.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>History</a>
+    <a href="bookmarks.html"><svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg>Bookmarks</a>
+    <a href="downloads.html"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg>Downloads</a>
+    <a href="settings.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg>Settings</a>
+  </nav>
+
+  <main>
+    <div class="head"><h1>Settings</h1></div>
+
+    <section id="appearance">
+      <h2>Appearance</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>Accent colour</b><small>Active tab, buttons and highlights. Private windows stay purple.</small></div>
+          <div class="swatches" id="accents"></div>
+        </div>
+        <div class="set">
+          <div class="label"><b>Clock and greeting on new tabs</b></div>
+          <label class="switch"><input type="checkbox" data-key="newTabClock"><span></span></label>
+        </div>
+        <div class="set">
+          <div class="label"><b>Bookmarks on new tabs</b></div>
+          <label class="switch"><input type="checkbox" data-key="newTabBookmarks"><span></span></label>
+        </div>
+      </div>
+    </section>
+
+    <section id="search">
+      <h2>Search and startup</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>Search engine</b><small>Used when what you type in the address bar isn't an address.</small></div>
+          <select class="input" id="engine"></select>
+        </div>
+        <div class="set">
+          <div class="label"><b>When bro! starts</b></div>
+          <div class="seg" id="startup">
+            <button data-value="newtab">Open a new tab</button>
+            <button data-value="restore">Continue where I left off</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="downloads">
+      <h2>Downloads</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>Save files to</b><div class="path" id="folder"></div></div>
+          <button class="btn" id="pick">Change…</button>
+        </div>
+        <div class="set">
+          <div class="label"><b>Ask where to save each file</b></div>
+          <label class="switch"><input type="checkbox" data-key="askWhereToSave"><span></span></label>
+        </div>
+      </div>
+    </section>
+
+    <section id="adblock">
+      <h2>Ad blocker</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>Block ads and trackers</b><small id="ab-status"></small></div>
+          <label class="switch"><input type="checkbox" data-key="adBlock"><span></span></label>
+        </div>
+        <div class="set">
+          <div class="label"><b>Filter lists</b><small id="ab-lists"></small></div>
+          <button class="btn" id="update">Update now</button>
+        </div>
+        <div class="set" style="border-bottom:0">
+          <div class="label"><b>Paused on these sites</b><small>Use the shield in the toolbar to pause blocking on a site.</small></div>
+        </div>
+        <div class="chips" id="paused"></div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <h2>Privacy</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>Tracking prevention</b><small>Chromium's built-in protection, on top of the ad blocker.</small></div>
+          <select class="input" id="tracking">
+            <option value="none">Off</option>
+            <option value="basic">Basic</option>
+            <option value="balanced">Balanced (recommended)</option>
+            <option value="strict">Strict — may break some sites</option>
+          </select>
+        </div>
+        <div class="set" style="flex-wrap:wrap">
+          <div class="label" style="flex-basis:100%"><b>Clear browsing data</b></div>
+          <select class="input" id="range" style="min-width:160px">
+            <option value="hour">Last hour</option>
+            <option value="day">Last 24 hours</option>
+            <option value="week">Last 7 days</option>
+            <option value="all" selected>All time</option>
+          </select>
+          <div class="checks">
+            <label><input type="checkbox" id="c-history" checked> History</label>
+            <label><input type="checkbox" id="c-cookies"> Cookies and site data</label>
+            <label><input type="checkbox" id="c-cache" checked> Cached files</label>
+            <label><input type="checkbox" id="c-downloads"> Download list</label>
+          </div>
+          <span style="flex:1"></span>
+          <span class="done" id="cleared" hidden>Cleared</span>
+          <button class="btn danger" id="clear">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="import">
+      <h2>Import and export</h2>
+      <div class="list">
+        <div class="set" style="flex-wrap:wrap">
+          <div class="label" style="flex-basis:100%"><b>Import from another browser</b>
+            <small>Bookmarks and the last 90 days of history. Passwords and cookies can't be imported — each browser encrypts them so only it can read them.</small></div>
+          <select class="input" id="browser" style="min-width:220px"><option>Looking for browsers…</option></select>
+          <div class="checks">
+            <label><input type="checkbox" id="i-bookmarks" checked> Bookmarks</label>
+            <label><input type="checkbox" id="i-history" checked> History</label>
+          </div>
+          <span style="flex:1"></span>
+          <button class="btn primary" id="import-browser" disabled>Import</button>
+        </div>
+        <div class="set">
+          <div class="label"><b>Bookmarks file</b><small>The .html file any browser can export or import.</small></div>
+          <button class="btn" id="import-html">Import…</button>
+          <button class="btn" id="export-html">Export…</button>
+        </div>
+        <div class="set">
+          <div class="label"><b>Back up and sync</b><small>Save your bookmarks, history and settings to one file. Import it in bro! on another PC to bring everything over — importing adds, it never deletes.</small></div>
+          <button class="btn" id="import-data">Import…</button>
+          <button class="btn" id="export-data">Export…</button>
+        </div>
+        <div class="set" id="import-msg" hidden><div class="label"><small id="import-text"></small></div></div>
+      </div>
+    </section>
+
+    <section id="about">
+      <h2>About</h2>
+      <div class="list">
+        <div class="set">
+          <div class="label"><b>bro! <span id="version"></span></b><small>A small Chromium browser (WebView2). Your data stays on this PC.</small></div>
+          <button class="btn" id="data">Open data folder</button>
+        </div>
+        <div class="keys">
+          <div>New tab <kbd>Ctrl+T</kbd></div><div>Reopen closed tab <kbd>Ctrl+Shift+T</kbd></div>
+          <div>New window <kbd>Ctrl+N</kbd></div><div>Private window <kbd>Ctrl+Shift+N</kbd></div>
+          <div>Bookmark page <kbd>Ctrl+D</kbd></div><div>Bookmarks <kbd>Ctrl+Shift+O</kbd></div>
+          <div>History <kbd>Ctrl+H</kbd></div><div>Downloads <kbd>Ctrl+J</kbd></div>
+          <div>Address bar <kbd>Ctrl+L</kbd></div><div>Full screen <kbd>F11</kbd></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const set = (key, value) => bro.send('setSetting', { key, value });
+
+    bro.on('settings', (m) => {
+      const s = m.settings;
+      $('#version').textContent = m.version;
+      $('#accents').replaceChildren(...s.accents.map((c) => {
+        const b = el('button', { class: `swatch ${c === s.accent ? 'on' : ''}`, title: c, onclick: () => set('accent', c) });
+        b.style.background = c;
+        return b;
+      }));
+      document.querySelectorAll('input[data-key]').forEach((i) => { i.checked = Boolean(s[i.dataset.key]); });
+      $('#engine').replaceChildren(...s.searchEngines.map((e) => el('option', { value: e.id, selected: e.id === s.searchEngine }, e.name)));
+      document.querySelectorAll('#startup button').forEach((b) => b.classList.toggle('on', b.dataset.value === s.startup));
+      $('#folder').textContent = s.downloadFolder;
+      $('#folder').title = s.downloadFolder;
+      $('#tracking').value = s.trackingPrevention;
+    });
+
+    bro.on('adblock', (m) => {
+      $('#ab-status').textContent = m.enabled ? m.status : 'Off';
+      $('#ab-lists').textContent = m.lists.join(' + ') + (m.updated ? ` · updated ${m.updated}` : '');
+      $('#update').disabled = m.updating;
+      $('#update').textContent = m.updating ? 'Updating…' : 'Update now';
+      const chips = m.paused.map((site) => el('span', { class: 'chip' }, site,
+        iconButton('x', `Resume blocking on ${site}`, () => bro.send('unpauseSite', { site }))));
+      $('#paused').replaceChildren(...(chips.length ? chips : [el('span', { class: 'path' }, 'None')]));
+    });
+
+    bro.on('cleared', () => {
+      $('#cleared').hidden = false;
+      $('#clear').disabled = false;
+      setTimeout(() => { $('#cleared').hidden = true; }, 2500);
+    });
+
+    document.querySelectorAll('input[data-key]').forEach((i) => i.addEventListener('change', () => set(i.dataset.key, i.checked)));
+    $('#engine').addEventListener('change', (e) => set('searchEngine', e.target.value));
+    $('#tracking').addEventListener('change', (e) => set('trackingPrevention', e.target.value));
+    document.querySelectorAll('#startup button').forEach((b) => b.addEventListener('click', () => set('startup', b.dataset.value)));
+    $('#pick').addEventListener('click', () => bro.send('pickDownloadFolder'));
+    $('#update').addEventListener('click', () => bro.send('updateLists'));
+    $('#data').addEventListener('click', () => bro.send('openDataFolder'));
+    $('#clear').addEventListener('click', () => {
+      $('#clear').disabled = true;
+      bro.send('clearData', {
+        range: $('#range').value,
+        history: $('#c-history').checked, cookies: $('#c-cookies').checked,
+        cache: $('#c-cache').checked, downloads: $('#c-downloads').checked,
+      });
+    });
+
+    // ── import / export ──
+    bro.on('browsers', (m) => {
+      const sel = $('#browser');
+      sel.replaceChildren(...(m.items.length
+        ? m.items.map((b) => el('option', { value: b.id }, b.label))
+        : [el('option', { value: '' }, 'No other browsers found')]));
+      $('#import-browser').disabled = m.items.length === 0;
+    });
+    bro.on('importResult', (m) => {
+      $('#import-msg').hidden = false;
+      const t = $('#import-text');
+      t.textContent = m.text;
+      t.style.color = m.ok ? '#6fcf7f' : 'var(--danger)';
+      $('#import-browser').disabled = $('#browser').value === '';
+      $('#import-browser').textContent = 'Import';
+    });
+    $('#import-browser').addEventListener('click', () => {
+      const bookmarks = $('#i-bookmarks').checked, history = $('#i-history').checked;
+      if (!bookmarks && !history) return;
+      $('#import-browser').disabled = true;
+      $('#import-browser').textContent = 'Importing…';
+      bro.send('importBrowser', { id: $('#browser').value, bookmarks, history });
+    });
+    $('#import-html').addEventListener('click', () => bro.send('importHtml'));
+    $('#export-html').addEventListener('click', () => bro.send('exportHtml'));
+    $('#import-data').addEventListener('click', () => bro.send('importData'));
+    $('#export-data').addEventListener('click', () => bro.send('exportData'));
+
+    bro.get('settings', 'adblock');
+    bro.send('getBrowsers');
+  </script>
+</body>
+</html>

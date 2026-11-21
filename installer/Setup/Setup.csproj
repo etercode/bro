@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- bro-setup.exe: a small per-user installer. It targets .NET Framework 4.8, which is built into
+       Windows 10/11, so the installer itself needs nothing extra. The app is embedded as payload.zip
+       (made by installer/build.ps1). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>bro-setup</AssemblyName>
+    <RootNamespace>BroSetup</RootNamespace>
+    <ApplicationIcon>..\..\assets\bro.ico</ApplicationIcon>
+    <Version>0.5.0</Version>
+    <Product>bro!</Product>
+    <AssemblyTitle>bro! setup</AssemblyTitle>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="Microsoft.CSharp" />
+    <EmbeddedResource Include="..\..\assets\bro.ico" LogicalName="app.ico" />
+    <Resource Include="..\..\assets\logo-256.png" Link="logo-256.png" />
+    <EmbeddedResource Include="$(PayloadZip)" LogicalName="payload.zip" Condition="'$(PayloadZip)' != ''" />
+  </ItemGroup>
+
+</Project>

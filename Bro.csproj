@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Bro</RootNamespace>
+    <AssemblyName>Bro</AssemblyName>
+    <Version>0.5.0</Version>
+    <Product>bro!</Product>
+    <AssemblyTitle>bro!</AssemblyTitle>
+    <ApplicationIcon>assets\bro.ico</ApplicationIcon>
+    <!-- The installer project and build output live in subfolders; keep them out of the app -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);installer\**;dist\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Browser UI (HTML/CSS/JS) and Bro's own pages are plain files next to the exe -->
+    <None Update="ui\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="pages\**" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="assets\bro.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <!-- Reads other browsers' history/bookmark databases when importing -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+
+</Project>

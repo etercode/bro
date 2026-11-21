@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bookmarks</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    .row[draggable="true"] { cursor: default; }
+    .row .grip { color: var(--muted); opacity: 0; cursor: grab; display: grid; margin-left: -6px; }
+    .row:hover .grip { opacity: .7; }
+    .row.dragging { opacity: .4; }
+    .row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+    .list.drop-end { box-shadow: inset 0 -2px 0 var(--accent); }
+    h2 .count { margin-left: 8px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+    .edit { display: grid; grid-template-columns: 1.2fr 1.6fr 1fr auto; gap: 10px; align-items: end; width: 100%; padding: 10px 0; }
+    .edit .buttons { display: flex; gap: 8px; }
+    .hint { color: var(--muted); font-size: 13px; margin: -12px 0 22px; }
+  </style>
+</head>
+<body>
+  <nav class="side">
+    <div class="brand"><img src="logo.png" alt="">bro!</div>
+    <a href="history.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>History</a>
+    <a href="bookmarks.html"><svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg>Bookmarks</a>
+    <a href="downloads.html"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg>Downloads</a>
+    <a href="settings.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/></svg>Settings</a>
+  </nav>
+
+  <main>
+    <div class="head">
+      <h1>Bookmarks</h1>
+      <input class="search" id="q" type="search" placeholder="Search bookmarks" autocomplete="off" spellcheck="false">
+    </div>
+    <p class="hint">Drag to reorder. To make a folder, edit a bookmark and type a folder name.</p>
+    <div id="out"></div>
+    <datalist id="folders"></datalist>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const out = document.getElementById('out');
+    const q = document.getElementById('q');
+    const foldersList = document.getElementById('folders');
+    let items = [];
+    let editing = null;  // id of the bookmark being edited
+    let dragId = null;
+
+    const folderName = (f) => f || 'Bookmarks';
+
+    function groups(list) {
+      const map = new Map([['', []]]);
+      for (const b of list) {
+        if (!map.has(b.folder)) map.set(b.folder, []);
+        map.get(b.folder).push(b);
+      }
+      if (map.get('').length === 0) map.delete('');
+      return map;
+    }
+
+    /** The bookmark that comes right after a folder's last one (where "drop at the end" inserts). */
+    function idAfterFolder(folder) {
+      let last = -1;
+      items.forEach((b, i) => { if (b.folder === folder) last = i; });
+      const next = items[last + 1];
+      return next && next.id !== dragId ? next.id : '';
+    }
+
+    function render() {
+      const words = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const shown = items.filter((b) => words.every((w) => (b.title + ' ' + b.url + ' ' + b.folder).toLowerCase().includes(w)));
+      foldersList.replaceChildren(...[...new Set(items.map((b) => b.folder).filter(Boolean))].map((f) => el('option', { value: f })));
+
+      out.replaceChildren();
+      if (shown.length === 0) {
+        out.append(el('div', { class: 'empty' },
+          el('b', {}, words.length ? 'No matches' : 'No bookmarks yet'),
+          words.length ? 'Try a different word.' : 'Click the bookmark icon in the toolbar (or press Ctrl+D) to save a page.'));
+        return;
+      }
+      const searching = words.length > 0;
+      for (const [folder, list] of groups(shown)) {
+        const listEl = el('div', { class: 'list' });
+        out.append(el('h2', {}, folderName(folder), el('span', { class: 'count' }, String(list.length))), listEl);
+        if (!searching) {
+          listEl.addEventListener('dragover', (e) => {
+            if (!dragId || e.target !== listEl) return;
+            e.preventDefault();
+            listEl.classList.add('drop-end');
+          });
+          listEl.addEventListener('dragleave', () => listEl.classList.remove('drop-end'));
+          listEl.addEventListener('drop', (e) => {
+            if (!dragId || e.target !== listEl) return;
+            e.preventDefault();
+            bro.send('moveBookmark', { id: dragId, beforeId: idAfterFolder(folder), folder });
+          });
+        }
+        for (const b of list) listEl.append(b.id === editing ? editRow(b) : row(b, searching));
+      }
+    }
+
+    function row(b, searching) {
+      const r = el('div', { class: 'row', draggable: searching ? null : 'true' },
+        searching ? null : el('span', { class: 'grip', title: 'Drag to move' }),
+        siteIcon(b.url, b.favicon),
+        el('div', { class: 'main' },
+          el('a', { class: 'title', href: b.url, title: b.url }, b.title || hostOf(b.url)),
+          el('span', { class: 'sub' }, hostOf(b.url))),
+        el('div', { class: 'actions' },
+          iconButton('edit', 'Edit', () => { editing = b.id; render(); }),
+          iconButton('trash', 'Delete', () => bro.send('removeBookmark', { id: b.id }), 'danger')));
+      const grip = r.querySelector('.grip');
+      if (grip) grip.innerHTML = ICON.grip;
+      if (!searching) {
+        r.addEventListener('dragstart', (e) => { dragId = b.id; r.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+        r.addEventListener('dragend', () => { dragId = null; r.classList.remove('dragging'); document.querySelectorAll('.drop-before,.drop-end').forEach((n) => n.classList.remove('drop-before', 'drop-end')); });
+        r.addEventListener('dragover', (e) => { if (dragId && dragId !== b.id) { e.preventDefault(); r.classList.add('drop-before'); } });
+        r.addEventListener('dragleave', () => r.classList.remove('drop-before'));
+        r.addEventListener('drop', (e) => {
+          e.preventDefault();
+          if (dragId && dragId !== b.id) bro.send('moveBookmark', { id: dragId, beforeId: b.id, folder: b.folder });
+        });
+      }
+      return r;
+    }
+
+    function editRow(b) {
+      const title = el('input', { class: 'input', value: b.title, spellcheck: 'false' });
+      const url = el('input', { class: 'input', value: b.url, spellcheck: 'false' });
+      const folder = el('input', { class: 'input', value: b.folder, list: 'folders', placeholder: 'No folder', spellcheck: 'false' });
+      const save = () => {
+        bro.send('updateBookmark', { id: b.id, title: title.value, url: url.value, folder: folder.value });
+        editing = null;
+      };
+      const cancel = () => { editing = null; render(); };
+      const form = el('div', { class: 'edit' },
+        el('div', { class: 'field' }, el('label', {}, 'Name'), title),
+        el('div', { class: 'field' }, el('label', {}, 'Address'), url),
+        el('div', { class: 'field' }, el('label', {}, 'Folder'), folder),
+        el('div', { class: 'buttons' },
+          el('button', { class: 'btn', onclick: cancel }, 'Cancel'),
+          el('button', { class: 'btn primary', onclick: save }, 'Save')));
+      form.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); else if (e.key === 'Escape') cancel(); });
+      setTimeout(() => title.focus(), 0);
+      return el('div', { class: 'row' }, form);
+    }
+
+    bro.on('bookmarks', (m) => { items = m.items; if (editing && !items.some((b) => b.id === editing)) editing = null; render(); });
+    q.addEventListener('input', render);
+    bro.get('settings', 'bookmarks');
+    render();
+  </script>
+</body>
+</html>
