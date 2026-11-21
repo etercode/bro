@@ -35,6 +35,26 @@ static class Native
     public static (int X, int Y) CursorPosition() { GetCursorPos(out var p); return (p.X, p.Y); }
 
     [DllImport("user32.dll")] static extern bool GetWindowRect(nint hwnd, out RECT rect);
+    [DllImport("user32.dll")] static extern nint WindowFromPoint(POINT p);
+    [DllImport("user32.dll")] static extern nint GetAncestor(nint hwnd, uint flags);
+
+    [DllImport("user32.dll")] static extern nint MonitorFromPoint(POINT p, uint flags);
+
+    /// <summary>Work area (screen minus taskbar) of the monitor at a point, in physical pixels.</summary>
+    public static (int Left, int Top, int Right, int Bottom) WorkAreaAt(int x, int y)
+    {
+        var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
+        var monitor = MonitorFromPoint(new POINT { X = x, Y = y }, MONITOR_DEFAULTTONEAREST);
+        if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return (x - 800, y - 600, x + 800, y + 600);
+        return (info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom);
+    }
+
+    /// <summary>The top-level window under a screen point (physical pixels).</summary>
+    public static nint TopLevelWindowAt(int x, int y)
+    {
+        var hwnd = WindowFromPoint(new POINT { X = x, Y = y });
+        return hwnd == 0 ? 0 : GetAncestor(hwnd, 2 /* GA_ROOT */);
+    }
 
     /// <summary>Is the mouse outside this window (e.g. a tab was dropped outside it)?</summary>
     public static bool IsCursorOutside(nint hwnd)

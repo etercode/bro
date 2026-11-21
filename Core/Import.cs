@@ -26,6 +26,12 @@ static class BrowserImport
     static readonly TimeSpan HistoryWindow = TimeSpan.FromDays(90);
     const int MaxVisits = 10_000;
 
+    /// <summary>
+    /// Chromium keeps bookmarks in "Bookmarks", and newer Chrome versions keep the ones from a signed-in
+    /// Google account in "AccountBookmarks" (same format). Both are read; duplicates are skipped later.
+    /// </summary>
+    static readonly string[] BookmarkFiles = { "Bookmarks", "AccountBookmarks" };
+
     // ───────────────────────── finding browsers ─────────────────────────
 
     public static List<BrowserProfile> Detect()
@@ -49,7 +55,7 @@ static class BrowserImport
             {
                 var folder = Path.GetFileName(dir);
                 if (folder != "Default" && !folder.StartsWith("Profile ")) continue;
-                if (!File.Exists(Path.Combine(dir, "Bookmarks")) && !File.Exists(Path.Combine(dir, "History"))) continue;
+                if (!BookmarkFiles.Any(b => File.Exists(Path.Combine(dir, b))) && !File.Exists(Path.Combine(dir, "History"))) continue;
                 found.Add(new($"{name}|{folder}", name, names.TryGetValue(folder, out var n) ? n : folder, false, dir));
             }
         }
@@ -61,7 +67,7 @@ static class BrowserImport
                  })
         {
             var profileDir = Directory.Exists(Path.Combine(dir, "Default")) ? Path.Combine(dir, "Default") : dir;
-            if (File.Exists(Path.Combine(profileDir, "Bookmarks")) || File.Exists(Path.Combine(profileDir, "History")))
+            if (BookmarkFiles.Any(b => File.Exists(Path.Combine(profileDir, b))) || File.Exists(Path.Combine(profileDir, "History")))
                 found.Add(new($"{name}|", name, "", false, profileDir));
         }
 
@@ -110,8 +116,9 @@ static class BrowserImport
         }
         else
         {
-            if (bookmarks && File.Exists(Path.Combine(p.Dir, "Bookmarks")))
-                marks = ChromiumBookmarks(ReadShared(Path.Combine(p.Dir, "Bookmarks")), p.Browser);
+            if (bookmarks)
+                foreach (var file in BookmarkFiles.Select(b => Path.Combine(p.Dir, b)).Where(File.Exists))
+                    marks.AddRange(ChromiumBookmarks(ReadShared(file), p.Browser));
             if (history && File.Exists(Path.Combine(p.Dir, "History")))
             {
                 using var copy = TempCopy.Of(Path.Combine(p.Dir, "History"), "-wal", "-journal");

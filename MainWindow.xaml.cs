@@ -586,11 +586,19 @@ public partial class MainWindow : Window
 
             // Tab order
             case "moveTab": MoveTab((int)Num("id"), (int)Num("index")); break;
-            case "detachTab": DetachTab((int)Num("id")); break;
             case "dropTab":
-                // Dropped outside the window → its own window; otherwise a new position
-                if (!Flag("inside") && Native.IsCursorOutside(Hwnd)) DetachTab((int)Num("id"));
+                // Released outside this window → another bro! window, a new window, or (only tab) move the window
+                if (!Flag("inside") && Native.IsCursorOutside(Hwnd)) DropTabOutside((int)Num("id"));
                 else if (Num("index") >= 0) MoveTab((int)Num("id"), (int)Num("index"));
+                break;
+#if DEBUG
+            case "testDropAt": // tests only: a drop at a given screen point, without moving the real mouse
+                DropTabOutside((int)Num("id"), ((int)Num("x"), (int)Num("y")));
+                break;
+#endif
+            case "tabMids":
+                if (msg.TryGetProperty("mids", out var mids) && mids.ValueKind == JsonValueKind.Array)
+                    _tabMids = mids.EnumerateArray().Where(m => m.ValueKind == JsonValueKind.Number).Select(m => m.GetDouble()).ToList();
                 break;
 
             // Zoom (Ctrl + scroll / Ctrl + plus/minus work inside the page too)

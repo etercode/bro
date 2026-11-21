@@ -139,7 +139,23 @@ function renderTabs(tabs) {
     lastActiveId = active.id;
     chips.get(active.id).scrollIntoView({ block: 'nearest' });
   }
+  reportTabMids();
 }
+
+// Where the tabs are, so a tab dragged in from another window lands where it's dropped
+let lastMids = '';
+function reportTabMids() {
+  const mids = state.tabs.map((t) => chips.get(t.id)).filter(Boolean).map((c) => {
+    const r = c.getBoundingClientRect();
+    return Math.round(r.top + r.height / 2);
+  });
+  const key = mids.join(',');
+  if (key === lastMids) return;
+  lastMids = key;
+  post('tabMids', { mids });
+}
+window.addEventListener('resize', () => { lastMids = ''; reportTabMids(); });
+tabsEl.addEventListener('scroll', () => { lastMids = ''; reportTabMids(); });
 
 // ── drag tabs: reorder, or drop outside the window to open it in a new one ──
 
@@ -163,8 +179,7 @@ tabsEl.addEventListener('pointermove', (e) => {
   drag.moved = true;
   drag.chip.classList.add('dragging');
   drag.chip.style.transform = `translate(${dx}px, ${dy}px)`;
-  drag.outside = state.tabs.length > 1 &&
-    (e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight);
+  drag.outside = e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
   document.body.classList.toggle('tab-detach', drag.outside);
 
   // Where would it land? Count the other tabs above the pointer.
