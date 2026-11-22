@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     bool _uiReady, _stateQueued, _fullscreen, _closing;
     bool _downloadFlash;
     WindowState _stateBeforeFullscreen;
+    Rect _boundsBeforeFullscreen;
     Rect _viewport = Rect.Empty;
 
     public bool IsPrivate { get; }
@@ -57,7 +58,14 @@ public partial class MainWindow : Window
         };
         Loaded += async (_, _) => await InitializeAsync();
         StateChanged += (_, _) => { ApplyWindowStateLayout(); QueueState(); };
-        Deactivated += (_, _) => { MenuPopup.IsOpen = false; CloseSuggestions(); ClosePopovers(); };
+        Deactivated += (_, _) =>
+        {
+            MenuPopup.IsOpen = false;
+            CloseSuggestions();
+            ClosePopovers();
+            if (_fullscreen) Topmost = false; // switching to another app: don't cover it
+        };
+        Activated += (_, _) => { if (_fullscreen) Topmost = true; };
         LocationChanged += (_, _) => CloseSuggestions();
         Root.SizeChanged += (_, _) => { if (_fullscreen) LayoutTabHost(); };
         Closing += (_, _) => OnClosing();
@@ -774,7 +782,7 @@ public partial class MainWindow : Window
 
     nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {
-        if (msg == Native.WM_GETMINMAXINFO) Native.FitMaximized(hwnd, lParam, coverTaskbar: _fullscreen);
+        if (msg == Native.WM_GETMINMAXINFO) Native.FitMaximized(hwnd, lParam, coverTaskbar: false);
         return 0;
     }
 
@@ -791,16 +799,44 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
-    /// <summary>Full-screen video etc.: the page covers the whole monitor, taskbar included.</summary>
+    /// <summary>
+    /// Full-screen video etc.: the page covers the whole monitor, taskbar included.
+    /// Like Chrome, this is a normal window the exact size of the monitor, not a maximized one:
+    /// WPF clips maximized borderless windows to the area above the taskbar, so the taskbar
+    /// would show through.
+    /// </summary>
     void SetFullscreen(bool on)
     {
         if (_fullscreen == on) return;
-        if (on) _stateBeforeFullscreen = WindowState;
-        _fullscreen = on;
         CloseSuggestions();
         MenuPopup.IsOpen = false;
-        WindowState = WindowState.Normal; // re-asks Windows for the maximized size
-        WindowState = on ? WindowState.Maximized : _stateBeforeFullscreen;
+        ClosePopovers();
+        if (on)
+        {
+            _stateBeforeFullscreen = WindowState;
+            _boundsBeforeFullscreen = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+            var (l, t, r, b) = Native.MonitorBounds(Hwnd);
+            var s = Scale;
+            _fullscreen = true;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Normal;
+            Left = l / s;
+            Top = t / s;
+            Width = (r - l) / s;
+            Height = (b - t) / s;
+        }
+        else
+        {
+            _fullscreen = false;
+            ResizeMode = ResizeMode.CanResize;
+            var b = _boundsBeforeFullscreen;
+            if (!b.IsEmpty) { Left = b.Left; Top = b.Top; Width = b.Width; Height = b.Height; }
+            WindowState = _stateBeforeFullscreen;
+        }
+        // Tell the taskbar (like Chrome does), and stay above it while full screen
+        Native.MarkFullscreen(Hwnd, on);
+        Topmost = on;
+        if (on) Activate();
         ApplyWindowStateLayout();
         if (_active != null) ClipToRoundedCorners(_active.View);
         if (!on && _active?.View.CoreWebView2 is { ContainsFullScreenElement: true } core)

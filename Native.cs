@@ -32,6 +32,38 @@ static class Native
 
     public static bool IsKeyDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
 
+    // The taskbar only gets out of the way for windows that tell it they're full screen (Chrome does the same).
+    [ComImport, Guid("602D4995-B13A-429b-A66E-1935E44F4317"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ITaskbarList2
+    {
+        void HrInit();
+        void AddTab(nint hwnd);
+        void DeleteTab(nint hwnd);
+        void ActivateTab(nint hwnd);
+        void SetActiveAlt(nint hwnd);
+        void MarkFullscreenWindow(nint hwnd, [MarshalAs(UnmanagedType.Bool)] bool fullscreen);
+    }
+
+    [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090"), ClassInterface(ClassInterfaceType.None)]
+    class TaskbarList { }
+
+    static ITaskbarList2? _taskbar;
+
+    public static void MarkFullscreen(nint hwnd, bool fullscreen)
+    {
+        try
+        {
+            if (_taskbar == null)
+            {
+                _taskbar = (ITaskbarList2)new TaskbarList();
+                _taskbar.HrInit();
+            }
+            _taskbar.MarkFullscreenWindow(hwnd, fullscreen);
+        }
+        catch (COMException) { }
+        catch (InvalidCastException) { }
+    }
+
     public static (int X, int Y) CursorPosition() { GetCursorPos(out var p); return (p.X, p.Y); }
 
     [DllImport("user32.dll")] static extern bool GetWindowRect(nint hwnd, out RECT rect);
@@ -39,6 +71,15 @@ static class Native
     [DllImport("user32.dll")] static extern nint GetAncestor(nint hwnd, uint flags);
 
     [DllImport("user32.dll")] static extern nint MonitorFromPoint(POINT p, uint flags);
+
+    /// <summary>The whole monitor a window is on (taskbar included), in physical pixels.</summary>
+    public static (int Left, int Top, int Right, int Bottom) MonitorBounds(nint hwnd)
+    {
+        var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return (0, 0, 1920, 1080);
+        return (info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
+    }
 
     /// <summary>Work area (screen minus taskbar) of the monitor at a point, in physical pixels.</summary>
     public static (int Left, int Top, int Right, int Bottom) WorkAreaAt(int x, int y)
